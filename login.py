@@ -52,7 +52,7 @@ def login(session, data):
     with open('login_cookie', 'w') as f:
         pickle.dump(requests.utils.dict_from_cookiejar(r.cookies), f)
     session.get(url = tempURL)
-    r = session.get('http://weibo.com/u/3288804021/home')
+    r = session.get('http://weibo.com')
     return r
 
 def main():
