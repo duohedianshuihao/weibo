@@ -56,7 +56,7 @@ def login(session, data):
     return r
 
 def main():
-    if os.path.exists('login'):
+    if os.path.exists('login_cookie'):
         with open('login_cookie', 'r') as f:
             cookies = requests.utils.cookiejar_from_dict(pickle.load(f))
         s = requests.session()
