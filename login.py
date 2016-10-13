@@ -3,6 +3,8 @@ import json
 from bs4 import BeautifulSoup
 import rsa
 from PIL import Image
+from gevent import monkey
+monkey.patch_all()
 
 headers = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36'
@@ -98,7 +100,7 @@ def find_user(findUsername, session):
     page = session.get(url = 'http://weibo.cn'+userUrl)
     return page, name
 
-def get_photoUrl(page, session):
+def get_photopageUrl(page, session):
     soup = BeautifulSoup(page.content)
     tempUrl = soup.findAll('span', {'class': 'pmsl'})[0].a.get('href')
     temp = session.get(url = 'http://weibo.cn'+tempUrl)
@@ -106,22 +108,45 @@ def get_photoUrl(page, session):
     photoUrl = pagesoup.findAll('img', {'alt': '微博配图'})[0].parent.get('href')
     return photoUrl
 
-def save_photo(photoUrl, session, name):
-    photoPage = session.get('http://weibo.cn'+photoUrl)    
+def get_phototags(photoUrl, session):
+    photoPage = session.get('http://weibo.cn'+photoUrl)
     photosoup = BeautifulSoup(photoPage.content)
     pageNum = photosoup.findAll('input', {'type': 'hidden'})[0].get('value')
+    global tags
+    tags = []
+    def addTags(i):
+        print 'page %d begin' % i
+        global tags
+        photoPage = session.get('http://weibo.cn'+photoUrl+'&page=%s' % i)
+        photosoup = BeautifulSoup(photoPage.content)
+        tags += photosoup.findAll('img', {'class': 'c'})
+        print 'page %d finished' % i
+    from gevent.pool import Pool    
+    pool = Pool(int(pageNum))
+    pool.map(addTags, xrange(1, int(pageNum)+1))
+    return tags
+
+
+
+def save_photo(tags, session, name):
     try:
         os.mkdir('%s' % name)
     except:
         pass
-    photoLink = photosoup.findAll('img', {'class': 'c'})
-    for index, item in enumerate(photoLink):
+    p = re.compile('square')
+    def saveLocal(i):
         p = re.compile('square')
-        photo = session.get(p.sub('large', item.get('src'))).content
-        with open('%s/photo%s' % (name, index), 'w') as f:
+        photo = session.get(p.sub('large', tags[i].get('src'))).content
+        with open('%s/photo%s' % (name, i), 'w') as f:
             f.write(photo)
-        print '%s finished' % index
-
+        print '%s finished' % i
+    from gevent.pool import Pool    
+    if len(tags) > 100:
+        pool = Pool(100)
+    else:
+        pool = Pool(len(tags))
+    pool.map(saveLocal, xrange(0, len(tags)))
+    print 'ALL done!'
 
 def main():
     try:
@@ -149,8 +174,9 @@ def main():
         exit()
     findUsername = raw_input('the user you want to find: ')
     page, name = find_user(findUsername, s)
-    photoUrl = get_photoUrl(page, s)
-    save_photo(photoUrl, s, name)    
+    photoUrl = get_photopageUrl(page, s)
+    tags = get_phototags(photoUrl, s)
+    save_photo(tags, s, name)
 
 if __name__ == '__main__':
     main()
